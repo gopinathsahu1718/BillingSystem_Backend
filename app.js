@@ -4,6 +4,7 @@ import express from 'express';
 import session from 'express-session';
 import { connectToDatabase } from './Database/Database.js';
 import adminRouter from './Router/Admin.router.js';
+import storeRouter from './Router/Store.router.js';
 
 const app = express();
 dotenv.config();
@@ -47,11 +48,12 @@ connectToDatabase();
 
 // Routes
 app.use('/api/admin', adminRouter);
+app.use('/api/store', storeRouter);
 
 app.use('/uploads', express.static('uploads'));
 
 app.get('/', (req, res) => {
-    res.send('Admin Authentication Backend - MySQL Version');
+    res.send('Admin Authentication Backend - MySQL Version with Store Management');
 });
 
 export default app;
