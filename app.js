@@ -48,7 +48,6 @@ connectToDatabase();
 // Routes
 app.use('/api/admin', adminRouter);
 
-// Serve static files for profile photos
 app.use('/uploads', express.static('uploads'));
 
 app.get('/', (req, res) => {

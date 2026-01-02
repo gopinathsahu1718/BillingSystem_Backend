@@ -60,13 +60,13 @@ const Register = async (req, res) => {
         }
 
         // Check if any admin already exists (only one admin allowed)
-        const adminCount = await Admin.count();
-        if (adminCount > 0) {
-            return res.status(403).json({
-                success: false,
-                message: 'Admin already exists. Only one admin account is allowed.'
-            });
-        }
+        // const adminCount = await Admin.count();
+        // if (adminCount > 0) {
+        //     return res.status(403).json({
+        //         success: false,
+        //         message: 'Admin already exists. Only one admin account is allowed.'
+        //     });
+        // }
 
         let { username, contact, email, password } = req.body;
         email = email?.toLowerCase();
@@ -660,7 +660,19 @@ const getAdminProfile = async (req, res) => {
 
 const updateProfile = async (req, res) => {
     try {
-        const allowedFields = ['username', 'contact'];
+        const allowedFields = [
+            'username',
+            'contact',
+            'storeName',
+            'storeOwnerName',
+            'gstin',
+            'address',
+            'pinCode',
+            'bankName',
+            'branch',
+            'accountNumber',
+            'ifscCode'
+        ];
         const receivedFields = Object.keys(req.body);
 
         if (receivedFields.length === 0) {
@@ -679,15 +691,30 @@ const updateProfile = async (req, res) => {
         }
 
         const updateData = {};
-        if (req.body.username !== undefined && req.body.username !== null) {
-            const trimmedUsername = String(req.body.username).trim();
-            if (trimmedUsername) updateData.username = trimmedUsername;
-        }
 
-        if (req.body.contact !== undefined && req.body.contact !== null) {
-            const trimmedContact = String(req.body.contact).trim();
-            if (trimmedContact) updateData.contact = trimmedContact;
-        }
+        // Process all string fields
+        const stringFields = [
+            'username',
+            'contact',
+            'storeName',
+            'storeOwnerName',
+            'gstin',
+            'address',
+            'pinCode',
+            'bankName',
+            'branch',
+            'accountNumber',
+            'ifscCode'
+        ];
+
+        stringFields.forEach(field => {
+            if (req.body[field] !== undefined && req.body[field] !== null) {
+                const trimmedValue = String(req.body[field]).trim();
+                if (trimmedValue) {
+                    updateData[field] = trimmedValue;
+                }
+            }
+        });
 
         if (Object.keys(updateData).length === 0) {
             return res.status(400).json({

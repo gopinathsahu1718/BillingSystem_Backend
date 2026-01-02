@@ -64,10 +64,91 @@ const Admin = sequelize.define('Admin', {
         allowNull: false,
         defaultValue: 'admin',
     },
-    profilePhoto: {
-        type: DataTypes.STRING(255),
+    // Store Details
+    storeName: {
+        type: DataTypes.STRING(100),
         allowNull: true,
-        defaultValue: null,
+        validate: {
+            len: {
+                args: [0, 100],
+                msg: 'Store name must not exceed 100 characters',
+            },
+        },
+    },
+    storeOwnerName: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+        validate: {
+            len: {
+                args: [0, 100],
+                msg: 'Store owner name must not exceed 100 characters',
+            },
+        },
+    },
+    gstin: {
+        type: DataTypes.STRING(15),
+        allowNull: true,
+        validate: {
+            is: {
+                args: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+                msg: 'Invalid GSTIN format',
+            },
+        },
+    },
+    address: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    pinCode: {
+        type: DataTypes.STRING(6),
+        allowNull: true,
+        validate: {
+            is: {
+                args: /^[1-9][0-9]{5}$/,
+                msg: 'Invalid pin code format',
+            },
+        },
+    },
+    // Bank Details
+    bankName: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+        validate: {
+            len: {
+                args: [0, 100],
+                msg: 'Bank name must not exceed 100 characters',
+            },
+        },
+    },
+    branch: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+        validate: {
+            len: {
+                args: [0, 100],
+                msg: 'Branch name must not exceed 100 characters',
+            },
+        },
+    },
+    accountNumber: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        validate: {
+            is: {
+                args: /^[0-9]{9,18}$/,
+                msg: 'Invalid account number format',
+            },
+        },
+    },
+    ifscCode: {
+        type: DataTypes.STRING(11),
+        allowNull: true,
+        validate: {
+            is: {
+                args: /^[A-Z]{4}0[A-Z0-9]{6}$/,
+                msg: 'Invalid IFSC code format',
+            },
+        },
     },
     isVerified: {
         type: DataTypes.BOOLEAN,
@@ -203,11 +284,6 @@ Admin.prototype.toJSON = function () {
     delete values.loginAttempts;
     delete values.loginLockUntil;
 
-    // Add profile photo URL if exists
-    if (values.profilePhoto) {
-        const baseUrl = process.env.BASE_URL || 'http://localhost:6000';
-        values.profilePhotoUrl = `${baseUrl}/${values.profilePhoto.replace(/\\/g, '/')}`;
-    }
 
     return values;
 };
