@@ -1,0 +1,39 @@
+{
+  "name": "admin-auth-mysql",
+  "version": "1.0.0",
+  "description": "Admin Authentication System using MySQL and Sequelize",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "db:sync": "node scripts/syncDatabase.js"
+  },
+  "keywords": [
+    "admin",
+    "authentication",
+    "mysql",
+    "sequelize",
+    "jwt",
+    "otp"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "email-validator": "^2.0.4",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "jsonwebtoken": "^9.0.2",
+    "moment-timezone": "^0.5.45",
+    "mysql2": "^3.11.4",
+    "nodemailer": "^6.9.15",
+    "sequelize": "^6.37.5",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
