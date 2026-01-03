@@ -389,6 +389,44 @@ const disableBill = async (req, res) => {
     }
 };
 
+// Enable bill
+const enableBill = async (req, res) => {
+    try {
+        const { billId } = req.params;
+
+        const bill = await Bill.findByPk(billId);
+
+        if (!bill) {
+            return res.status(404).json({
+                success: false,
+                message: 'Bill not found',
+            });
+        }
+
+        if (bill.isActive === 1) {
+            return res.status(400).json({
+                success: false,
+                message: 'Bill is already enabled',
+            });
+        }
+
+        await bill.update({ isActive: 1 });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Bill enabled successfully',
+            data: bill,
+        });
+    } catch (error) {
+        console.error('Enable bill error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message,
+        });
+    }
+};
+
 // Get dashboard data
 const getDashboardData = async (req, res) => {
     try {
@@ -694,5 +732,6 @@ export {
     getAllBills,
     getBillById,
     disableBill,
+    enableBill,
     getDashboardData,
 };
