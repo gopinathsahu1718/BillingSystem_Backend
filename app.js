@@ -5,6 +5,7 @@ import session from 'express-session';
 import { connectToDatabase } from './Database/Database.js';
 import adminRouter from './Router/Admin.router.js';
 import storeRouter from './Router/Store.router.js';
+import cartRouter from './Router/Cart.router.js';
 
 const app = express();
 dotenv.config();
@@ -17,9 +18,6 @@ app.use(
             'http://localhost:3000',
             'http://localhost:5500',
             'http://127.0.0.1:5500',
-            'https://www.hearingzen.in',
-            'https://hearingzen.in',
-            'https://console.hearingzen.in',
         ],
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
@@ -49,11 +47,12 @@ connectToDatabase();
 // Routes
 app.use('/api/admin', adminRouter);
 app.use('/api/store', storeRouter);
+app.use('/api', cartRouter);
 
 app.use('/uploads', express.static('uploads'));
 
 app.get('/', (req, res) => {
-    res.send('Admin Authentication Backend - MySQL Version with Store Management');
+    res.send('Admin Authentication Backend - MySQL Version with Store Management & Cart');
 });
 
 export default app;
