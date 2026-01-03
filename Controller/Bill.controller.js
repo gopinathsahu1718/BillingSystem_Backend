@@ -1,4 +1,4 @@
-import { Bill, BillItem, Cart, Product, Admin } from '../Model/associations.js';
+import { Bill, BillItem, Cart, Product, Admin, Category, SubCategory } from '../Model/associations.js';
 import { sequelize } from '../Database/Database.js';
 
 // Generate unique bill number
@@ -389,9 +389,310 @@ const disableBill = async (req, res) => {
     }
 };
 
+// Get dashboard data
+const getDashboardData = async (req, res) => {
+    try {
+        const now = new Date();
+
+        // Date ranges
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayEnd = new Date(todayStart);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+
+        const weekStart = new Date(now);
+        weekStart.setDate(weekStart.getDate() - 7);
+
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        // 1. Total Bills (All Time)
+        const totalBills = await Bill.count({
+            where: { isActive: 1 },
+        });
+
+        const totalBillsAmount = await Bill.sum('grandTotal', {
+            where: { isActive: 1 },
+        });
+
+        // 2. Today's Bills
+        const todayBills = await Bill.count({
+            where: {
+                isActive: 1,
+                createdAt: {
+                    [sequelize.Sequelize.Op.gte]: todayStart,
+                    [sequelize.Sequelize.Op.lt]: todayEnd,
+                },
+            },
+        });
+
+        const todayBillsAmount = await Bill.sum('grandTotal', {
+            where: {
+                isActive: 1,
+                createdAt: {
+                    [sequelize.Sequelize.Op.gte]: todayStart,
+                    [sequelize.Sequelize.Op.lt]: todayEnd,
+                },
+            },
+        });
+
+        // 3. This Week's Bills
+        const weekBills = await Bill.count({
+            where: {
+                isActive: 1,
+                createdAt: {
+                    [sequelize.Sequelize.Op.gte]: weekStart,
+                },
+            },
+        });
+
+        const weekBillsAmount = await Bill.sum('grandTotal', {
+            where: {
+                isActive: 1,
+                createdAt: {
+                    [sequelize.Sequelize.Op.gte]: weekStart,
+                },
+            },
+        });
+
+        // 4. This Month's Bills
+        const monthBills = await Bill.count({
+            where: {
+                isActive: 1,
+                createdAt: {
+                    [sequelize.Sequelize.Op.gte]: monthStart,
+                },
+            },
+        });
+
+        const monthBillsAmount = await Bill.sum('grandTotal', {
+            where: {
+                isActive: 1,
+                createdAt: {
+                    [sequelize.Sequelize.Op.gte]: monthStart,
+                },
+            },
+        });
+
+        // 5. Bills by Category
+        const billsByCategory = await sequelize.query(`
+      SELECT 
+        c.id,
+        c.name as categoryName,
+        COUNT(DISTINCT b.id) as billCount,
+        SUM(bi.quantity) as totalQuantity,
+        SUM(bi.total) as totalAmount
+      FROM categories c
+      LEFT JOIN products p ON c.id = p.categoryId
+      LEFT JOIN bill_items bi ON p.id = bi.productId
+      LEFT JOIN bills b ON bi.billId = b.id AND b.isActive = 1
+      GROUP BY c.id, c.name
+      ORDER BY totalAmount DESC
+    `, {
+            type: sequelize.QueryTypes.SELECT,
+        });
+
+        // 6. Bills by SubCategory
+        const billsBySubCategory = await sequelize.query(`
+      SELECT 
+        sc.id,
+        sc.name as subCategoryName,
+        c.name as categoryName,
+        COUNT(DISTINCT b.id) as billCount,
+        SUM(bi.quantity) as totalQuantity,
+        SUM(bi.total) as totalAmount
+      FROM subcategories sc
+      LEFT JOIN categories c ON sc.categoryId = c.id
+      LEFT JOIN products p ON sc.id = p.subCategoryId
+      LEFT JOIN bill_items bi ON p.id = bi.productId
+      LEFT JOIN bills b ON bi.billId = b.id AND b.isActive = 1
+      GROUP BY sc.id, sc.name, c.name
+      ORDER BY totalAmount DESC
+      LIMIT 10
+    `, {
+            type: sequelize.QueryTypes.SELECT,
+        });
+
+        // 7. Last 5 Bills
+        const lastFiveBills = await Bill.findAll({
+            where: { isActive: 1 },
+            include: [
+                {
+                    model: BillItem,
+                    as: 'items',
+                    limit: 3, // Show only first 3 items per bill
+                },
+                {
+                    model: Admin,
+                    as: 'creator',
+                    attributes: ['id', 'username'],
+                },
+            ],
+            order: [['createdAt', 'DESC']],
+            limit: 5,
+        });
+
+        // 8. Top 5 Products (Most Sold)
+        const topProducts = await sequelize.query(`
+      SELECT 
+        bi.productName,
+        bi.productSKU,
+        SUM(bi.quantity) as totalQuantitySold,
+        COUNT(DISTINCT bi.billId) as billCount,
+        SUM(bi.total) as totalRevenue
+      FROM bill_items bi
+      JOIN bills b ON bi.billId = b.id
+      WHERE b.isActive = 1
+      GROUP BY bi.productId, bi.productName, bi.productSKU
+      ORDER BY totalQuantitySold DESC
+      LIMIT 5
+    `, {
+            type: sequelize.QueryTypes.SELECT,
+        });
+
+        // 9. Payment Mode Distribution
+        const paymentModeStats = await Bill.findAll({
+            where: { isActive: 1 },
+            attributes: [
+                'paymentMode',
+                [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+                [sequelize.fn('SUM', sequelize.col('grandTotal')), 'total'],
+            ],
+            group: ['paymentMode'],
+            raw: true,
+        });
+
+        // 10. Revenue Trend (Last 7 Days)
+        const revenueTrend = await sequelize.query(`
+      SELECT 
+        DATE(createdAt) as date,
+        COUNT(*) as billCount,
+        SUM(subtotal) as subtotal,
+        SUM(totalGST) as totalGST,
+        SUM(grandTotal) as grandTotal
+      FROM bills
+      WHERE isActive = 1
+      AND createdAt >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+      GROUP BY DATE(createdAt)
+      ORDER BY date ASC
+    `, {
+            type: sequelize.QueryTypes.SELECT,
+        });
+
+        // 11. GST Summary
+        const gstSummary = await Bill.findAll({
+            where: { isActive: 1 },
+            attributes: [
+                [sequelize.fn('SUM', sequelize.col('subtotal')), 'totalSubtotal'],
+                [sequelize.fn('SUM', sequelize.col('cgst')), 'totalCGST'],
+                [sequelize.fn('SUM', sequelize.col('sgst')), 'totalSGST'],
+                [sequelize.fn('SUM', sequelize.col('totalGST')), 'totalGST'],
+            ],
+            raw: true,
+        });
+
+        // 12. Low Stock Alert (Products with stock < 10)
+        const lowStockProducts = await Product.findAll({
+            where: {
+                isActive: 1,
+                stock: {
+                    [sequelize.Sequelize.Op.lt]: 10,
+                },
+            },
+            attributes: ['id', 'name', 'sku', 'stock', 'price'],
+            include: [
+                {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['name'],
+                },
+                {
+                    model: SubCategory,
+                    as: 'subcategory',
+                    attributes: ['name'],
+                },
+            ],
+            order: [['stock', 'ASC']],
+            limit: 10,
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                overview: {
+                    totalBills: {
+                        count: totalBills || 0,
+                        amount: parseFloat(totalBillsAmount || 0).toFixed(2),
+                    },
+                    todayBills: {
+                        count: todayBills || 0,
+                        amount: parseFloat(todayBillsAmount || 0).toFixed(2),
+                    },
+                    weekBills: {
+                        count: weekBills || 0,
+                        amount: parseFloat(weekBillsAmount || 0).toFixed(2),
+                    },
+                    monthBills: {
+                        count: monthBills || 0,
+                        amount: parseFloat(monthBillsAmount || 0).toFixed(2),
+                    },
+                },
+                billsByCategory: billsByCategory.map(cat => ({
+                    categoryId: cat.id,
+                    categoryName: cat.categoryName,
+                    billCount: parseInt(cat.billCount) || 0,
+                    totalQuantity: parseInt(cat.totalQuantity) || 0,
+                    totalAmount: parseFloat(cat.totalAmount || 0).toFixed(2),
+                })),
+                billsBySubCategory: billsBySubCategory.map(sub => ({
+                    subCategoryId: sub.id,
+                    subCategoryName: sub.subCategoryName,
+                    categoryName: sub.categoryName,
+                    billCount: parseInt(sub.billCount) || 0,
+                    totalQuantity: parseInt(sub.totalQuantity) || 0,
+                    totalAmount: parseFloat(sub.totalAmount || 0).toFixed(2),
+                })),
+                lastFiveBills: lastFiveBills,
+                topProducts: topProducts.map(prod => ({
+                    productName: prod.productName,
+                    productSKU: prod.productSKU,
+                    totalQuantitySold: parseInt(prod.totalQuantitySold),
+                    billCount: parseInt(prod.billCount),
+                    totalRevenue: parseFloat(prod.totalRevenue).toFixed(2),
+                })),
+                paymentModeStats: paymentModeStats.map(pm => ({
+                    paymentMode: pm.paymentMode,
+                    count: parseInt(pm.count),
+                    total: parseFloat(pm.total).toFixed(2),
+                })),
+                revenueTrend: revenueTrend.map(day => ({
+                    date: day.date,
+                    billCount: parseInt(day.billCount),
+                    subtotal: parseFloat(day.subtotal).toFixed(2),
+                    totalGST: parseFloat(day.totalGST).toFixed(2),
+                    grandTotal: parseFloat(day.grandTotal).toFixed(2),
+                })),
+                gstSummary: {
+                    totalSubtotal: parseFloat(gstSummary[0].totalSubtotal || 0).toFixed(2),
+                    totalCGST: parseFloat(gstSummary[0].totalCGST || 0).toFixed(2),
+                    totalSGST: parseFloat(gstSummary[0].totalSGST || 0).toFixed(2),
+                    totalGST: parseFloat(gstSummary[0].totalGST || 0).toFixed(2),
+                },
+                lowStockProducts: lowStockProducts,
+            },
+        });
+    } catch (error) {
+        console.error('Get dashboard data error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message,
+        });
+    }
+};
+
 export {
     createBill,
     getAllBills,
     getBillById,
     disableBill,
+    getDashboardData,
 };
