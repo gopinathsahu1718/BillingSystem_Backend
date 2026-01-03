@@ -3,6 +3,8 @@ import { SubCategory } from './SubCategory.model.js';
 import { Product } from './Product.model.js';
 import { Cart } from './Cart.model.js';
 import { Admin } from './Admin.model.js';
+import { Bill } from './Bill.model.js';
+import { BillItem } from './BillItem.model.js';
 
 // Define associations
 Category.hasMany(SubCategory, {
@@ -66,4 +68,41 @@ Cart.belongsTo(Product, {
     as: 'product',
 });
 
-export { Category, SubCategory, Product, Cart, Admin };
+// Bill associations
+Admin.hasMany(Bill, {
+    foreignKey: 'createdBy',
+    as: 'bills',
+    onDelete: 'RESTRICT',
+    onUpdate: 'CASCADE',
+});
+
+Bill.belongsTo(Admin, {
+    foreignKey: 'createdBy',
+    as: 'creator',
+});
+
+Bill.hasMany(BillItem, {
+    foreignKey: 'billId',
+    as: 'items',
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
+});
+
+BillItem.belongsTo(Bill, {
+    foreignKey: 'billId',
+    as: 'bill',
+});
+
+Product.hasMany(BillItem, {
+    foreignKey: 'productId',
+    as: 'billItems',
+    onDelete: 'RESTRICT',
+    onUpdate: 'CASCADE',
+});
+
+BillItem.belongsTo(Product, {
+    foreignKey: 'productId',
+    as: 'product',
+});
+
+export { Category, SubCategory, Product, Cart, Admin, Bill, BillItem };

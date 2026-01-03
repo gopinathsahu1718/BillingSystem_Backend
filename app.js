@@ -6,6 +6,7 @@ import { connectToDatabase } from './Database/Database.js';
 import adminRouter from './Router/Admin.router.js';
 import storeRouter from './Router/Store.router.js';
 import cartRouter from './Router/Cart.router.js';
+import billRouter from './Router/Bill.router.js';
 
 const app = express();
 dotenv.config();
@@ -48,11 +49,12 @@ connectToDatabase();
 app.use('/api/admin', adminRouter);
 app.use('/api/store', storeRouter);
 app.use('/api', cartRouter);
+app.use('/api', billRouter);
 
 app.use('/uploads', express.static('uploads'));
 
 app.get('/', (req, res) => {
-    res.send('Admin Authentication Backend - MySQL Version with Store Management & Cart');
+    res.send('Inventory Management System - Admin, Store, Cart & Billing');
 });
 
 export default app;
