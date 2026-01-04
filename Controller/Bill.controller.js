@@ -602,20 +602,24 @@ const getDashboardData = async (req, res) => {
             limit: 5,
         });
 
-        // 8. Top 5 Products (Most Sold)
+        // 8. Top 5 Products (Most Sold) - Including Attributes
         const topProducts = await sequelize.query(`
       SELECT 
+        bi.productId,
         bi.productName,
         bi.productSKU,
+        bi.attributeId,
+        bi.attributeName,
+        bi.attributeValue,
         SUM(bi.quantity) as totalQuantitySold,
         COUNT(DISTINCT bi.billId) as billCount,
         SUM(bi.total) as totalRevenue
       FROM bill_items bi
       JOIN bills b ON bi.billId = b.id
       WHERE b.isActive = 1
-      GROUP BY bi.productId, bi.productName, bi.productSKU
+      GROUP BY bi.productId, bi.attributeId, bi.productName, bi.productSKU, bi.attributeName, bi.attributeValue
       ORDER BY totalQuantitySold DESC
-      LIMIT 5
+      LIMIT 10
     `, {
             type: sequelize.QueryTypes.SELECT,
         });
@@ -661,7 +665,7 @@ const getDashboardData = async (req, res) => {
             raw: true,
         });
 
-        // 12. Low Stock Alert (Products with stock < 10)
+        // 12. Low Stock Alert (Products and Attributes with stock < 10)
         const lowStockProducts = await Product.findAll({
             where: {
                 isActive: 1,
@@ -684,6 +688,60 @@ const getDashboardData = async (req, res) => {
             ],
             order: [['stock', 'ASC']],
             limit: 10,
+        });
+
+        // 13. Low Stock Attributes (Attributes with stock < 10)
+        const lowStockAttributes = await ProductAttribute.findAll({
+            where: {
+                isActive: 1,
+                stock: {
+                    [sequelize.Sequelize.Op.lt]: 10,
+                },
+            },
+            attributes: ['id', 'productId', 'attributeName', 'attributeValue', 'sku', 'stock', 'price'],
+            include: [
+                {
+                    model: Product,
+                    as: 'product',
+                    attributes: ['id', 'name', 'sku'],
+                    include: [
+                        {
+                            model: Category,
+                            as: 'category',
+                            attributes: ['name'],
+                        },
+                        {
+                            model: SubCategory,
+                            as: 'subcategory',
+                            attributes: ['name'],
+                        },
+                    ],
+                },
+            ],
+            order: [['stock', 'ASC']],
+            limit: 10,
+        });
+
+        // 14. Top Product Attributes (Most Sold Variants)
+        const topAttributes = await sequelize.query(`
+      SELECT 
+        bi.productId,
+        bi.productName,
+        bi.attributeId,
+        bi.attributeName,
+        bi.attributeValue,
+        bi.productSKU,
+        SUM(bi.quantity) as totalQuantitySold,
+        COUNT(DISTINCT bi.billId) as billCount,
+        SUM(bi.total) as totalRevenue
+      FROM bill_items bi
+      JOIN bills b ON bi.billId = b.id
+      WHERE b.isActive = 1 AND bi.attributeId IS NOT NULL
+      GROUP BY bi.productId, bi.attributeId, bi.productName, bi.attributeName, bi.attributeValue, bi.productSKU
+      ORDER BY totalQuantitySold DESC
+      LIMIT 10
+    `, {
+            type: sequelize.QueryTypes.SELECT,
         });
 
         return res.status(200).json({
@@ -724,11 +782,30 @@ const getDashboardData = async (req, res) => {
                 })),
                 lastFiveBills: lastFiveBills,
                 topProducts: topProducts.map(prod => ({
+                    productId: prod.productId,
                     productName: prod.productName,
                     productSKU: prod.productSKU,
+                    attributeId: prod.attributeId,
+                    attributeName: prod.attributeName,
+                    attributeValue: prod.attributeValue,
+                    displayName: prod.attributeValue
+                        ? `${prod.productName} (${prod.attributeValue})`
+                        : prod.productName,
                     totalQuantitySold: parseInt(prod.totalQuantitySold),
                     billCount: parseInt(prod.billCount),
                     totalRevenue: parseFloat(prod.totalRevenue).toFixed(2),
+                })),
+                topAttributes: topAttributes.map(attr => ({
+                    productId: attr.productId,
+                    productName: attr.productName,
+                    attributeId: attr.attributeId,
+                    attributeName: attr.attributeName,
+                    attributeValue: attr.attributeValue,
+                    productSKU: attr.productSKU,
+                    displayName: `${attr.productName} - ${attr.attributeValue}`,
+                    totalQuantitySold: parseInt(attr.totalQuantitySold),
+                    billCount: parseInt(attr.billCount),
+                    totalRevenue: parseFloat(attr.totalRevenue).toFixed(2),
                 })),
                 paymentModeStats: paymentModeStats.map(pm => ({
                     paymentMode: pm.paymentMode,
@@ -749,6 +826,20 @@ const getDashboardData = async (req, res) => {
                     totalGST: parseFloat(gstSummary[0].totalGST || 0).toFixed(2),
                 },
                 lowStockProducts: lowStockProducts,
+                lowStockAttributes: lowStockAttributes.map(attr => ({
+                    id: attr.id,
+                    productId: attr.productId,
+                    productName: attr.product.name,
+                    productSKU: attr.product.sku,
+                    attributeName: attr.attributeName,
+                    attributeValue: attr.attributeValue,
+                    sku: attr.sku,
+                    stock: attr.stock,
+                    price: attr.price,
+                    displayName: `${attr.product.name} - ${attr.attributeValue}`,
+                    category: attr.product.category?.name,
+                    subcategory: attr.product.subcategory?.name,
+                })),
             },
         });
     } catch (error) {
