@@ -28,6 +28,16 @@ const BillItem = sequelize.define('BillItem', {
         onUpdate: 'CASCADE',
         onDelete: 'RESTRICT',
     },
+    attributeId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'product_attributes',
+            key: 'id',
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'RESTRICT',
+    },
     // Product snapshot at time of billing
     productName: {
         type: DataTypes.STRING(200),
@@ -36,6 +46,15 @@ const BillItem = sequelize.define('BillItem', {
     productSKU: {
         type: DataTypes.STRING(50),
         allowNull: false,
+    },
+    // Attribute snapshot (if applicable)
+    attributeName: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+    },
+    attributeValue: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
     },
     quantity: {
         type: DataTypes.INTEGER,
@@ -90,6 +109,9 @@ const BillItem = sequelize.define('BillItem', {
         },
         {
             fields: ['productId'],
+        },
+        {
+            fields: ['attributeId'],
         },
     ],
 });

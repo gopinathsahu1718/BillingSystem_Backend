@@ -1,4 +1,4 @@
-import { Cart, Product, Category, SubCategory } from '../Model/associations.js';
+import { Cart, Product, ProductAttribute, Category, SubCategory } from '../Model/associations.js';
 
 // Get all cart items
 const getCartItems = async (req, res) => {
@@ -37,6 +37,20 @@ const getCartItems = async (req, res) => {
                         },
                     ],
                 },
+                {
+                    model: ProductAttribute,
+                    as: 'attribute',
+                    attributes: [
+                        'id',
+                        'attributeName',
+                        'attributeValue',
+                        'price',
+                        'actualPrice',
+                        'stock',
+                        'sku',
+                        'isActive',
+                    ],
+                },
             ],
             order: [['createdAt', 'DESC']],
         });
@@ -49,7 +63,13 @@ const getCartItems = async (req, res) => {
 
         const cartData = cartItems.map((item) => {
             const product = item.product;
+            const attribute = item.attribute;
             const quantity = item.quantity;
+
+            // Determine which price and stock to use (attribute overrides product)
+            const itemPrice = attribute ? parseFloat(attribute.price) : parseFloat(product.price);
+            const itemStock = attribute ? attribute.stock : product.stock;
+            const itemSKU = attribute ? attribute.sku : product.sku;
 
             // Add thumbnail URL if exists
             let productData = product.toJSON();
@@ -59,7 +79,6 @@ const getCartItems = async (req, res) => {
             }
 
             // Calculate item totals
-            const itemPrice = parseFloat(product.price);
             const itemSubtotal = itemPrice * quantity;
             const itemGST = (itemSubtotal * parseFloat(product.gstRate || 0)) / 100;
             const itemTotal = itemSubtotal + itemGST;
@@ -73,8 +92,22 @@ const getCartItems = async (req, res) => {
             return {
                 id: item.id,
                 productId: product.id,
+                attributeId: attribute ? attribute.id : null,
                 quantity: quantity,
                 product: productData,
+                attribute: attribute ? {
+                    id: attribute.id,
+                    attributeName: attribute.attributeName,
+                    attributeValue: attribute.attributeValue,
+                    price: attribute.price,
+                    actualPrice: attribute.actualPrice,
+                    stock: attribute.stock,
+                    sku: attribute.sku,
+                    isActive: attribute.isActive,
+                } : null,
+                effectivePrice: itemPrice.toFixed(2),
+                effectiveStock: itemStock,
+                effectiveSKU: itemSKU,
                 itemSubtotal: itemSubtotal.toFixed(2),
                 itemGST: itemGST.toFixed(2),
                 itemTotal: itemTotal.toFixed(2),
@@ -108,7 +141,7 @@ const getCartItems = async (req, res) => {
 const addToCart = async (req, res) => {
     try {
         const adminId = req.admin.id;
-        const { productId, quantity = 1 } = req.body;
+        const { productId, attributeId = null, quantity = 1 } = req.body;
 
         // Validation
         if (!productId) {
@@ -126,7 +159,15 @@ const addToCart = async (req, res) => {
         }
 
         // Check if product exists and is active
-        const product = await Product.findByPk(productId);
+        const product = await Product.findByPk(productId, {
+            include: [
+                {
+                    model: ProductAttribute,
+                    as: 'attributes',
+                },
+            ],
+        });
+
         if (!product) {
             return res.status(404).json({
                 success: false,
@@ -141,17 +182,52 @@ const addToCart = async (req, res) => {
             });
         }
 
+        // Determine price and stock based on attribute
+        let effectivePrice, effectiveStock, attribute = null;
+
+        if (attributeId) {
+            // If attribute ID provided, validate and use attribute price/stock
+            attribute = await ProductAttribute.findOne({
+                where: { id: attributeId, productId: productId },
+            });
+
+            if (!attribute) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Product attribute not found',
+                });
+            }
+
+            if (attribute.isActive !== 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Product attribute is not available',
+                });
+            }
+
+            effectivePrice = parseFloat(attribute.price);
+            effectiveStock = attribute.stock;
+        } else {
+            // No attribute, use product price/stock
+            effectivePrice = parseFloat(product.price);
+            effectiveStock = product.stock;
+        }
+
         // Check stock availability
-        if (product.stock < quantity) {
+        if (effectiveStock < quantity) {
             return res.status(400).json({
                 success: false,
-                message: `Only ${product.stock} units available in stock`,
+                message: `Only ${effectiveStock} units available in stock`,
             });
         }
 
-        // Check if product already in cart
+        // Check if product+attribute already in cart
         let cartItem = await Cart.findOne({
-            where: { adminId, productId },
+            where: {
+                adminId,
+                productId,
+                attributeId: attributeId || null,
+            },
         });
 
         if (cartItem) {
@@ -159,10 +235,10 @@ const addToCart = async (req, res) => {
             const newQuantity = cartItem.quantity + quantity;
 
             // Check stock for new quantity
-            if (product.stock < newQuantity) {
+            if (effectiveStock < newQuantity) {
                 return res.status(400).json({
                     success: false,
-                    message: `Only ${product.stock} units available in stock`,
+                    message: `Only ${effectiveStock} units available in stock`,
                 });
             }
 
@@ -188,6 +264,10 @@ const addToCart = async (req, res) => {
                             },
                         ],
                     },
+                    {
+                        model: ProductAttribute,
+                        as: 'attribute',
+                    },
                 ],
             });
 
@@ -201,6 +281,7 @@ const addToCart = async (req, res) => {
             cartItem = await Cart.create({
                 adminId,
                 productId,
+                attributeId: attributeId || null,
                 quantity,
             });
 
@@ -222,6 +303,10 @@ const addToCart = async (req, res) => {
                                 attributes: ['id', 'name'],
                             },
                         ],
+                    },
+                    {
+                        model: ProductAttribute,
+                        as: 'attribute',
                     },
                 ],
             });
@@ -257,6 +342,10 @@ const updateCart = async (req, res) => {
                     model: Product,
                     as: 'product',
                 },
+                {
+                    model: ProductAttribute,
+                    as: 'attribute',
+                },
             ],
         });
 
@@ -268,6 +357,7 @@ const updateCart = async (req, res) => {
         }
 
         const product = cartItem.product;
+        const attribute = cartItem.attribute;
 
         // Check if product is still active
         if (product.isActive !== 1) {
@@ -276,6 +366,17 @@ const updateCart = async (req, res) => {
                 message: 'Product is no longer available',
             });
         }
+
+        // Check if attribute is still active (if applicable)
+        if (attribute && attribute.isActive !== 1) {
+            return res.status(400).json({
+                success: false,
+                message: 'Product attribute is no longer available',
+            });
+        }
+
+        // Determine effective stock
+        const effectiveStock = attribute ? attribute.stock : product.stock;
 
         let newQuantity = cartItem.quantity;
 
@@ -302,10 +403,10 @@ const updateCart = async (req, res) => {
         }
 
         // Check stock availability
-        if (product.stock < newQuantity) {
+        if (effectiveStock < newQuantity) {
             return res.status(400).json({
                 success: false,
-                message: `Only ${product.stock} units available in stock`,
+                message: `Only ${effectiveStock} units available in stock`,
             });
         }
 
@@ -331,6 +432,10 @@ const updateCart = async (req, res) => {
                             attributes: ['id', 'name'],
                         },
                     ],
+                },
+                {
+                    model: ProductAttribute,
+                    as: 'attribute',
                 },
             ],
         });

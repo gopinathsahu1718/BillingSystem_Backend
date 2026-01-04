@@ -1,4 +1,4 @@
-import { Category, SubCategory, Product } from '../Model/associations.js';
+import { Category, SubCategory, Product, ProductAttribute } from '../Model/associations.js';
 import { sequelize } from '../Database/Database.js';
 import fs from 'fs';
 import path from 'path';
@@ -615,6 +615,11 @@ const getAllProducts = async (req, res) => {
                     as: 'subcategory',
                     attributes: ['id', 'name'],
                 },
+                {
+                    model: ProductAttribute,
+                    as: 'attributes',
+                    required: false,
+                },
             ],
             where: {},
         };
@@ -675,6 +680,10 @@ const getProductById = async (req, res) => {
                     model: SubCategory,
                     as: 'subcategory',
                     attributes: ['id', 'name', 'categoryId'],
+                },
+                {
+                    model: ProductAttribute,
+                    as: 'attributes',
                 },
             ],
         });

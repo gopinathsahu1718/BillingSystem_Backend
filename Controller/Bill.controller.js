@@ -1,4 +1,4 @@
-import { Bill, BillItem, Cart, Product, Admin, Category, SubCategory } from '../Model/associations.js';
+import { Bill, BillItem, Cart, Product, ProductAttribute, Admin, Category, SubCategory } from '../Model/associations.js';
 import { sequelize } from '../Database/Database.js';
 
 // Generate unique bill number
@@ -70,6 +70,10 @@ const createBill = async (req, res) => {
                     model: Product,
                     as: 'product',
                 },
+                {
+                    model: ProductAttribute,
+                    as: 'attribute',
+                },
             ],
             transaction,
         });
@@ -90,6 +94,7 @@ const createBill = async (req, res) => {
 
         for (const cartItem of cartItems) {
             const product = cartItem.product;
+            const attribute = cartItem.attribute;
 
             // Check if product is active
             if (product.isActive !== 1) {
@@ -100,17 +105,34 @@ const createBill = async (req, res) => {
                 });
             }
 
-            // Check stock availability
-            if (product.stock < cartItem.quantity) {
+            // Check if attribute is active (if applicable)
+            if (attribute && attribute.isActive !== 1) {
                 await transaction.rollback();
                 return res.status(400).json({
                     success: false,
-                    message: `Insufficient stock for "${product.name}". Available: ${product.stock}, Required: ${cartItem.quantity}`,
+                    message: `Product attribute "${attribute.attributeValue}" is not available`,
+                });
+            }
+
+            // Determine effective price, stock, and SKU based on attribute
+            const effectivePrice = attribute ? parseFloat(attribute.price) : parseFloat(product.price);
+            const effectiveStock = attribute ? attribute.stock : product.stock;
+            const effectiveSKU = attribute ? attribute.sku : product.sku;
+
+            // Check stock availability
+            if (effectiveStock < cartItem.quantity) {
+                await transaction.rollback();
+                const displayName = attribute
+                    ? `${product.name} (${attribute.attributeValue})`
+                    : product.name;
+                return res.status(400).json({
+                    success: false,
+                    message: `Insufficient stock for "${displayName}". Available: ${effectiveStock}, Required: ${cartItem.quantity}`,
                 });
             }
 
             // Calculate item amounts
-            const unitPrice = parseFloat(product.price);
+            const unitPrice = effectivePrice;
             const quantity = cartItem.quantity;
             const gstRate = parseFloat(product.gstRate || 0);
 
@@ -126,10 +148,13 @@ const createBill = async (req, res) => {
             totalSGST += itemSGST;
 
             // Prepare bill item data
-            billItems.push({
+            const billItemData = {
                 productId: product.id,
+                attributeId: attribute ? attribute.id : null,
                 productName: product.name,
-                productSKU: product.sku,
+                productSKU: effectiveSKU,
+                attributeName: attribute ? attribute.attributeName : null,
+                attributeValue: attribute ? attribute.attributeValue : null,
                 quantity: quantity,
                 unit: product.unit,
                 unitPrice: unitPrice,
@@ -139,13 +164,22 @@ const createBill = async (req, res) => {
                 sgst: itemSGST.toFixed(2),
                 totalGST: itemTotalGST.toFixed(2),
                 total: itemTotal.toFixed(2),
-            });
+            };
 
-            // Update product stock
-            await product.update(
-                { stock: product.stock - quantity },
-                { transaction }
-            );
+            billItems.push(billItemData);
+
+            // Update stock (product or attribute based)
+            if (attribute) {
+                await attribute.update(
+                    { stock: attribute.stock - quantity },
+                    { transaction }
+                );
+            } else {
+                await product.update(
+                    { stock: product.stock - quantity },
+                    { transaction }
+                );
+            }
         }
 
         const totalGST = totalCGST + totalSGST;

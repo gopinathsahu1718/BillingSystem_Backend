@@ -1,6 +1,7 @@
 import { Category } from './Category.model.js';
 import { SubCategory } from './SubCategory.model.js';
 import { Product } from './Product.model.js';
+import { ProductAttribute } from './ProductAttribute.model.js';
 import { Cart } from './Cart.model.js';
 import { Admin } from './Admin.model.js';
 import { Bill } from './Bill.model.js';
@@ -43,6 +44,19 @@ Product.belongsTo(SubCategory, {
     as: 'subcategory',
 });
 
+// Product Attributes associations
+Product.hasMany(ProductAttribute, {
+    foreignKey: 'productId',
+    as: 'attributes',
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
+});
+
+ProductAttribute.belongsTo(Product, {
+    foreignKey: 'productId',
+    as: 'product',
+});
+
 // Cart associations
 Admin.hasMany(Cart, {
     foreignKey: 'adminId',
@@ -66,6 +80,18 @@ Product.hasMany(Cart, {
 Cart.belongsTo(Product, {
     foreignKey: 'productId',
     as: 'product',
+});
+
+ProductAttribute.hasMany(Cart, {
+    foreignKey: 'attributeId',
+    as: 'cartItems',
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
+});
+
+Cart.belongsTo(ProductAttribute, {
+    foreignKey: 'attributeId',
+    as: 'attribute',
 });
 
 // Bill associations
@@ -105,4 +131,16 @@ BillItem.belongsTo(Product, {
     as: 'product',
 });
 
-export { Category, SubCategory, Product, Cart, Admin, Bill, BillItem };
+ProductAttribute.hasMany(BillItem, {
+    foreignKey: 'attributeId',
+    as: 'billItems',
+    onDelete: 'RESTRICT',
+    onUpdate: 'CASCADE',
+});
+
+BillItem.belongsTo(ProductAttribute, {
+    foreignKey: 'attributeId',
+    as: 'attribute',
+});
+
+export { Category, SubCategory, Product, ProductAttribute, Cart, Admin, Bill, BillItem };

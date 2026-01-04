@@ -7,6 +7,7 @@ import adminRouter from './Router/Admin.router.js';
 import storeRouter from './Router/Store.router.js';
 import cartRouter from './Router/Cart.router.js';
 import billRouter from './Router/Bill.router.js';
+import productAttributeRouter from './Router/ProductAttribute.router.js';
 
 const app = express();
 dotenv.config();
@@ -50,11 +51,12 @@ app.use('/api/admin', adminRouter);
 app.use('/api/store', storeRouter);
 app.use('/api', cartRouter);
 app.use('/api', billRouter);
+app.use('/api', productAttributeRouter);
 
 app.use('/uploads', express.static('uploads'));
 
 app.get('/', (req, res) => {
-    res.send('Inventory Management System - Admin, Store, Cart & Billing');
+    res.send('Inventory Management System - Admin, Store, Cart, Billing & Product Attributes');
 });
 
 export default app;

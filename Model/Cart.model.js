@@ -28,6 +28,16 @@ const Cart = sequelize.define('Cart', {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE',
     },
+    attributeId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'product_attributes',
+            key: 'id',
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    },
     quantity: {
         type: DataTypes.INTEGER,
         allowNull: false,
@@ -45,14 +55,17 @@ const Cart = sequelize.define('Cart', {
     indexes: [
         {
             unique: true,
-            fields: ['adminId', 'productId'],
-            name: 'unique_admin_product',
+            fields: ['adminId', 'productId', 'attributeId'],
+            name: 'unique_admin_product_attribute',
         },
         {
             fields: ['adminId'],
         },
         {
             fields: ['productId'],
+        },
+        {
+            fields: ['attributeId'],
         },
     ],
 });
