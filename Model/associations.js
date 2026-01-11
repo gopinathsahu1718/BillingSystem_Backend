@@ -6,6 +6,7 @@ import { Cart } from './Cart.model.js';
 import { Admin } from './Admin.model.js';
 import { Bill } from './Bill.model.js';
 import { BillItem } from './BillItem.model.js';
+import { StoreProfile } from './StoreProfile.model.js';
 
 // Define associations
 Category.hasMany(SubCategory, {
@@ -143,4 +144,4 @@ BillItem.belongsTo(ProductAttribute, {
     as: 'attribute',
 });
 
-export { Category, SubCategory, Product, ProductAttribute, Cart, Admin, Bill, BillItem };
+export { Category, SubCategory, Product, ProductAttribute, Cart, Admin, Bill, BillItem, StoreProfile };

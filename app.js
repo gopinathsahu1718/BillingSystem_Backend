@@ -1,17 +1,22 @@
-import cors from 'cors';
-import dotenv from 'dotenv';
 import express from 'express';
+import cors from 'cors';
 import session from 'express-session';
+import dotenv from 'dotenv';
 import { connectToDatabase } from './Database/Database.js';
+
+// Import routers
 import adminRouter from './Router/Admin.router.js';
 import storeRouter from './Router/Store.router.js';
 import cartRouter from './Router/Cart.router.js';
 import billRouter from './Router/Bill.router.js';
 import productAttributeRouter from './Router/ProductAttribute.router.js';
+import storeProfileRouter from './Router/StoreProfile.router.js';
 
-const app = express();
 dotenv.config();
 
+const app = express();
+
+// CORS configuration
 app.use(
     cors({
         credentials: true,
@@ -26,6 +31,7 @@ app.use(
     })
 );
 
+// Session configuration
 app.use(
     session({
         secret: process.env.SESSION_SECRET || 'supersecret',
@@ -43,20 +49,54 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Static files - serve uploaded files
+app.use('/uploads', express.static('uploads'));
+
 // Connect to database
 connectToDatabase();
 
 // Routes
+app.get('/', (req, res) => {
+    res.json({
+        success: true,
+        message: 'Inventory Management System API',
+        version: '1.0.0',
+        features: [
+            'Admin Authentication',
+            'Store Management (Categories, SubCategories, Products)',
+            'Product Attributes/Variants',
+            'Shopping Cart',
+            'Billing System with GST',
+            'Dashboard Analytics',
+            'Store Profiles (Laxmi & Swasthik)',
+        ],
+    });
+});
+
+// API Routes
 app.use('/api/admin', adminRouter);
 app.use('/api/store', storeRouter);
 app.use('/api', cartRouter);
 app.use('/api', billRouter);
 app.use('/api', productAttributeRouter);
+app.use('/api/store', storeProfileRouter);
 
-app.use('/uploads', express.static('uploads'));
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        message: 'Route not found',
+    });
+});
 
-app.get('/', (req, res) => {
-    res.send('Inventory Management System - Admin, Store, Cart, Billing & Product Attributes');
+// Error handler
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+    });
 });
 
 export default app;

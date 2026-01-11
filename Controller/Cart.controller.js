@@ -55,77 +55,67 @@ const getCartItems = async (req, res) => {
             order: [['createdAt', 'DESC']],
         });
 
-        // Calculate totals
-        let totalItems = 0;
-        let subtotal = 0;
-        let totalGST = 0;
-        let grandTotal = 0;
-
-        const cartData = cartItems.map((item) => {
+        // Calculate effective price, stock, and SKU for each item
+        const itemsWithDetails = cartItems.map((item) => {
             const product = item.product;
             const attribute = item.attribute;
-            const quantity = item.quantity;
 
-            // Determine which price and stock to use (attribute overrides product)
-            const itemPrice = attribute ? parseFloat(attribute.price) : parseFloat(product.price);
-            const itemStock = attribute ? attribute.stock : product.stock;
-            const itemSKU = attribute ? attribute.sku : product.sku;
+            const effectivePrice = attribute ? parseFloat(attribute.price) : parseFloat(product.price);
+            const effectiveStock = attribute ? attribute.stock : product.stock;
+            const effectiveSKU = attribute ? attribute.sku : product.sku;
 
             // Add thumbnail URL if exists
-            let productData = product.toJSON();
-            if (productData.thumbnailImage) {
+            if (product.thumbnailImage) {
                 const baseUrl = process.env.BASE_URL || 'http://localhost:6000';
-                productData.thumbnailImageUrl = `${baseUrl}/${productData.thumbnailImage.replace(/\\/g, '/')}`;
+                product.dataValues.thumbnailImageUrl = `${baseUrl}/${product.thumbnailImage.replace(/\\/g, '/')}`;
             }
 
-            // Calculate item totals
-            const itemSubtotal = itemPrice * quantity;
-            const itemGST = (itemSubtotal * parseFloat(product.gstRate || 0)) / 100;
+            // Calculate item amounts
+            const itemSubtotal = effectivePrice * item.quantity;
+            const gstRate = parseFloat(product.gstRate || 0);
+
+            // GST only for swasthik_enterprises
+            const categoryName = product.category.name;
+            let itemGST = 0;
+
+            if (categoryName === 'swasthik_enterprises') {
+                itemGST = (itemSubtotal * gstRate) / 100;
+            }
+
             const itemTotal = itemSubtotal + itemGST;
 
-            // Add to cart totals
-            totalItems += quantity;
-            subtotal += itemSubtotal;
-            totalGST += itemGST;
-            grandTotal += itemTotal;
-
             return {
-                id: item.id,
-                productId: product.id,
-                attributeId: attribute ? attribute.id : null,
-                quantity: quantity,
-                product: productData,
-                attribute: attribute ? {
-                    id: attribute.id,
-                    attributeName: attribute.attributeName,
-                    attributeValue: attribute.attributeValue,
-                    price: attribute.price,
-                    actualPrice: attribute.actualPrice,
-                    stock: attribute.stock,
-                    sku: attribute.sku,
-                    isActive: attribute.isActive,
-                } : null,
-                effectivePrice: itemPrice.toFixed(2),
-                effectiveStock: itemStock,
-                effectiveSKU: itemSKU,
+                ...item.toJSON(),
+                effectivePrice: effectivePrice.toFixed(2),
+                effectiveStock,
+                effectiveSKU,
                 itemSubtotal: itemSubtotal.toFixed(2),
                 itemGST: itemGST.toFixed(2),
                 itemTotal: itemTotal.toFixed(2),
-                createdAt: item.createdAt,
-                updatedAt: item.updatedAt,
             };
         });
 
+        // Calculate cart summary
+        let subtotal = 0;
+        let totalGST = 0;
+
+        itemsWithDetails.forEach((item) => {
+            subtotal += parseFloat(item.itemSubtotal);
+            totalGST += parseFloat(item.itemGST);
+        });
+
+        const grandTotal = subtotal + totalGST;
+
         return res.status(200).json({
             success: true,
-            count: cartItems.length,
-            totalItems: totalItems,
+            count: itemsWithDetails.length,
+            totalItems: itemsWithDetails.reduce((sum, item) => sum + item.quantity, 0),
             summary: {
                 subtotal: subtotal.toFixed(2),
                 totalGST: totalGST.toFixed(2),
                 grandTotal: grandTotal.toFixed(2),
             },
-            data: cartData,
+            data: itemsWithDetails,
         });
     } catch (error) {
         console.error('Get cart items error:', error);
@@ -165,6 +155,11 @@ const addToCart = async (req, res) => {
                     model: ProductAttribute,
                     as: 'attributes',
                 },
+                {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'name'],
+                },
             ],
         });
 
@@ -180,6 +175,39 @@ const addToCart = async (req, res) => {
                 success: false,
                 message: 'Product is not available',
             });
+        }
+
+        // CATEGORY MIXING PREVENTION
+        // Check if cart already has products from different category
+        const existingCartItems = await Cart.findAll({
+            where: { adminId },
+            include: [
+                {
+                    model: Product,
+                    as: 'product',
+                    include: [
+                        {
+                            model: Category,
+                            as: 'category',
+                            attributes: ['id', 'name'],
+                        },
+                    ],
+                },
+            ],
+        });
+
+        if (existingCartItems.length > 0) {
+            const existingCategoryId = existingCartItems[0].product.categoryId;
+            const existingCategoryName = existingCartItems[0].product.category.name;
+
+            if (existingCategoryId !== product.categoryId) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Cannot mix products from different stores. Your cart contains items from ${existingCategoryName}. Please clear your cart first.`,
+                    currentCategory: existingCategoryName,
+                    attemptedCategory: product.category.name,
+                });
+            }
         }
 
         // Determine price and stock based on attribute
@@ -327,14 +355,13 @@ const addToCart = async (req, res) => {
     }
 };
 
-// Update cart (increment/decrement quantity)
+// Update cart item
 const updateCart = async (req, res) => {
     try {
         const adminId = req.admin.id;
         const { cartId } = req.params;
         const { quantity, action } = req.body;
 
-        // Find cart item
         const cartItem = await Cart.findOne({
             where: { id: cartId, adminId },
             include: [
@@ -376,15 +403,14 @@ const updateCart = async (req, res) => {
         }
 
         // Determine effective stock
-        const effectiveStock = attribute ? attribute.stock : product.stock;
+        const effectiveStock = cartItem.attribute ? cartItem.attribute.stock : cartItem.product.stock;
 
         let newQuantity = cartItem.quantity;
 
-        // Handle different actions
         if (action === 'increment') {
             newQuantity += 1;
         } else if (action === 'decrement') {
-            newQuantity -= 1;
+            newQuantity = Math.max(1, newQuantity - 1);
         } else if (quantity !== undefined) {
             newQuantity = parseInt(quantity);
         } else {
@@ -398,23 +424,29 @@ const updateCart = async (req, res) => {
         if (newQuantity < 1) {
             return res.status(400).json({
                 success: false,
-                message: 'Quantity must be at least 1. Use remove endpoint to delete item.',
+                message: 'Quantity must be at least 1',
             });
         }
 
-        // Check stock availability
-        if (effectiveStock < newQuantity) {
+        if (newQuantity > effectiveStock) {
             return res.status(400).json({
                 success: false,
                 message: `Only ${effectiveStock} units available in stock`,
             });
         }
 
-        // Update quantity
+        // Check if attribute is still active (if applicable)
+        if (cartItem.attribute && cartItem.attribute.isActive !== 1) {
+            return res.status(400).json({
+                success: false,
+                message: 'Product attribute is no longer available',
+            });
+        }
+
         cartItem.quantity = newQuantity;
         await cartItem.save();
 
-        // Fetch with updated details
+        // Fetch with complete details
         const updatedCartItem = await Cart.findByPk(cartItem.id, {
             include: [
                 {
@@ -461,7 +493,6 @@ const removeFromCart = async (req, res) => {
         const adminId = req.admin.id;
         const { cartId } = req.params;
 
-        // Find cart item
         const cartItem = await Cart.findOne({
             where: { id: cartId, adminId },
         });
@@ -477,7 +508,7 @@ const removeFromCart = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: 'Product removed from cart successfully',
+            message: 'Item removed from cart successfully',
         });
     } catch (error) {
         console.error('Remove from cart error:', error);
@@ -489,9 +520,4 @@ const removeFromCart = async (req, res) => {
     }
 };
 
-export {
-    getCartItems,
-    addToCart,
-    updateCart,
-    removeFromCart,
-};
+export { getCartItems, addToCart, updateCart, removeFromCart };

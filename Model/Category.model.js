@@ -20,6 +20,11 @@ const Category = sequelize.define('Category', {
                 args: [1, 100],
                 msg: 'Category name must be between 1 and 100 characters',
             },
+            isValidCategoryName(value) {
+                if (!['laxmi_bookstore', 'swasthik_enterprises'].includes(value)) {
+                    throw new Error('Only laxmi_bookstore and swasthik_enterprises categories are allowed');
+                }
+            }
         },
     },
     description: {

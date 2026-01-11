@@ -69,6 +69,13 @@ const createBill = async (req, res) => {
                 {
                     model: Product,
                     as: 'product',
+                    include: [
+                        {
+                            model: Category,
+                            as: 'category',
+                            attributes: ['id', 'name'],
+                        },
+                    ],
                 },
                 {
                     model: ProductAttribute,
@@ -134,13 +141,29 @@ const createBill = async (req, res) => {
             // Calculate item amounts
             const unitPrice = effectivePrice;
             const quantity = cartItem.quantity;
+
+            // Get category name to check if GST applies
+            const categoryName = product.category.name;
             const gstRate = parseFloat(product.gstRate || 0);
 
-            const itemSubtotal = unitPrice * quantity;
-            const itemTotalGST = (itemSubtotal * gstRate) / 100;
-            const itemCGST = itemTotalGST / 2; // CGST is half of total GST
-            const itemSGST = itemTotalGST / 2; // SGST is half of total GST
-            const itemTotal = itemSubtotal + itemTotalGST;
+            // GST calculations only for swasthik_enterprises
+            let itemSubtotal, itemTotalGST, itemCGST, itemSGST, itemTotal;
+
+            itemSubtotal = unitPrice * quantity;
+
+            if (categoryName === 'swasthik_enterprises') {
+                // Apply GST for Swasthik
+                itemTotalGST = (itemSubtotal * gstRate) / 100;
+                itemCGST = itemTotalGST / 2;
+                itemSGST = itemTotalGST / 2;
+                itemTotal = itemSubtotal + itemTotalGST;
+            } else {
+                // No GST for Laxmi Bookstore
+                itemTotalGST = 0;
+                itemCGST = 0;
+                itemSGST = 0;
+                itemTotal = itemSubtotal;
+            }
 
             // Add to bill totals
             subtotal += itemSubtotal;
@@ -260,19 +283,28 @@ const createBill = async (req, res) => {
 // Get all bills
 const getAllBills = async (req, res) => {
     try {
-        const {
-            search,
-            paymentMode,
-            isActive,
-            sortBy = 'createdAt',
-            sortOrder = 'DESC',
-        } = req.query;
+        const { categoryName, search, paymentMode, isActive, sortBy = 'createdAt', sortOrder = 'DESC' } = req.query;
 
         const options = {
+            order: [[sortBy, sortOrder]],
             include: [
                 {
                     model: BillItem,
                     as: 'items',
+                    include: [
+                        {
+                            model: Product,
+                            as: 'product',
+                            attributes: ['id', 'name', 'sku', 'thumbnailImage', 'categoryId'],
+                            include: [
+                                {
+                                    model: Category,
+                                    as: 'category',
+                                    attributes: ['id', 'name'],
+                                },
+                            ],
+                        },
+                    ],
                 },
                 {
                     model: Admin,
@@ -281,8 +313,17 @@ const getAllBills = async (req, res) => {
                 },
             ],
             where: {},
-            order: [[sortBy, sortOrder]],
         };
+
+        // Filter by category name (laxmi_bookstore or swasthik_enterprises)
+        if (categoryName) {
+            options.include[0].include[0].include[0].where = {
+                name: categoryName,
+            };
+            options.include[0].required = true;
+            options.include[0].include[0].required = true;
+            options.include[0].include[0].include[0].required = true;
+        }
 
         // Search by bill number, customer name, or contact
         if (search) {
@@ -353,6 +394,13 @@ const getBillById = async (req, res) => {
                             model: Product,
                             as: 'product',
                             attributes: ['id', 'name', 'sku', 'thumbnailImage'],
+                            include: [
+                                {
+                                    model: Category,
+                                    as: 'category',
+                                    attributes: ['id', 'name'],
+                                },
+                            ],
                         },
                     ],
                 },
