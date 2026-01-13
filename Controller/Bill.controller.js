@@ -2,37 +2,34 @@ import { Bill, BillItem, Cart, Product, ProductAttribute, Admin, Category, SubCa
 import { sequelize } from '../Database/Database.js';
 
 // Generate unique bill number
-const generateBillNumber = async () => {
+const generateBillNumber = async (transaction = null) => {
     const prefix = 'INV';
     const date = new Date();
-    const year = date.getFullYear().toString().slice(-2);
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString().slice(-2); // 26
+    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // 01
 
-    // Get the last bill number for today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
+    // Find the HIGHEST sequence number used so far for this year-month
     const lastBill = await Bill.findOne({
         where: {
-            createdAt: {
-                [sequelize.Sequelize.Op.gte]: today,
-                [sequelize.Sequelize.Op.lt]: tomorrow,
-            },
+            billNumber: {
+                [sequelize.Sequelize.Op.like]: `${prefix}${year}${month}-%`
+            }
         },
-        order: [['id', 'DESC']],
+        attributes: ['billNumber'],
+        order: [[sequelize.literal("CAST(SUBSTRING_INDEX(billNumber, '-', -1) AS UNSIGNED)"), 'DESC']],
+        transaction,
+        limit: 1
     });
 
-    let sequence = 1;
+    let nextSequence = 1;
+
     if (lastBill) {
-        // Extract sequence from last bill number (INV2401-0001 -> 0001)
-        const lastSequence = parseInt(lastBill.billNumber.split('-')[1]);
-        sequence = lastSequence + 1;
+        const lastSeqStr = lastBill.billNumber.split('-')[1];
+        nextSequence = parseInt(lastSeqStr, 10) + 1;
     }
 
-    const billNumber = `${prefix}${year}${month}-${sequence.toString().padStart(4, '0')}`;
-    return billNumber;
+    const sequencePadded = nextSequence.toString().padStart(4, '0');
+    return `${prefix}${year}${month}-${sequencePadded}`;
 };
 
 // Create bill from cart
