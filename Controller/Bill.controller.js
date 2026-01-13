@@ -2,34 +2,32 @@ import { Bill, BillItem, Cart, Product, ProductAttribute, Admin, Category, SubCa
 import { sequelize } from '../Database/Database.js';
 
 // Generate unique bill number
-const generateBillNumber = async (transaction = null) => {
+const generateBillNumber = async () => {
     const prefix = 'INV';
     const date = new Date();
-    const year = date.getFullYear().toString().slice(-2); // 26
-    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // 01
+    const year = date.getFullYear().toString().slice(-2);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const yearMonthPrefix = `${prefix}${year}${month}`;
 
-    // Find the HIGHEST sequence number used so far for this year-month
+    // Get the last bill number with the current year-month prefix
     const lastBill = await Bill.findOne({
         where: {
             billNumber: {
-                [sequelize.Sequelize.Op.like]: `${prefix}${year}${month}-%`
-            }
+                [sequelize.Sequelize.Op.like]: `${yearMonthPrefix}-%`,
+            },
         },
-        attributes: ['billNumber'],
-        order: [[sequelize.literal("CAST(SUBSTRING_INDEX(billNumber, '-', -1) AS UNSIGNED)"), 'DESC']],
-        transaction,
-        limit: 1
+        order: [['billNumber', 'DESC']],
     });
 
-    let nextSequence = 1;
-
+    let sequence = 1;
     if (lastBill) {
-        const lastSeqStr = lastBill.billNumber.split('-')[1];
-        nextSequence = parseInt(lastSeqStr, 10) + 1;
+        // Extract sequence from last bill number (INV2601-0001 -> 0001)
+        const lastSequence = parseInt(lastBill.billNumber.split('-')[1]);
+        sequence = lastSequence + 1;
     }
 
-    const sequencePadded = nextSequence.toString().padStart(4, '0');
-    return `${prefix}${year}${month}-${sequencePadded}`;
+    const billNumber = `${yearMonthPrefix}-${sequence.toString().padStart(4, '0')}`;
+    return billNumber;
 };
 
 // Create bill from cart
