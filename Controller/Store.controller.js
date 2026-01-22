@@ -734,6 +734,21 @@ const addProduct = async (req, res) => {
             });
         }
 
+        // Validate prices
+        if (price <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Price must be greater than 0',
+            });
+        }
+
+        if (actualPrice !== undefined && actualPrice !== null && actualPrice <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Actual price must be greater than 0',
+            });
+        }
+
         // Check if category exists
         const category = await Category.findByPk(categoryId);
         if (!category) {
@@ -903,6 +918,21 @@ const updateProduct = async (req, res) => {
                     message: 'Product with this SKU already exists',
                 });
             }
+        }
+
+        // Validate prices if provided
+        if (price !== undefined && price <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Price must be greater than 0',
+            });
+        }
+
+        if (actualPrice !== undefined && actualPrice !== null && actualPrice <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Actual price must be greater than 0',
+            });
         }
 
         const updateData = {};
