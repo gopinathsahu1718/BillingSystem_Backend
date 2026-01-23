@@ -619,6 +619,7 @@ const getAllProducts = async (req, res) => {
                     model: ProductAttribute,
                     as: 'attributes',
                     required: false,
+                    where: { isActive: 1 }, // Only include active attributes
                 },
             ],
             where: {},
@@ -635,8 +636,12 @@ const getAllProducts = async (req, res) => {
         }
 
         // Filter by active status
+        // By default, only return active products (isActive = 1)
         if (isActive !== undefined) {
             options.where.isActive = isActive === 'true' ? 1 : 0;
+        } else {
+            // Default: only show active products
+            options.where.isActive = 1;
         }
 
         // Search by name or SKU
@@ -684,6 +689,8 @@ const getProductById = async (req, res) => {
                 {
                     model: ProductAttribute,
                     as: 'attributes',
+                    where: { isActive: 1 }, // Only include active attributes
+                    required: false,
                 },
             ],
         });
@@ -692,6 +699,14 @@ const getProductById = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: 'Product not found',
+            });
+        }
+
+        // Check if product is active
+        if (product.isActive === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Product not found or has been deleted',
             });
         }
 
@@ -1014,18 +1029,32 @@ const deleteProduct = async (req, res) => {
             });
         }
 
-        // Delete thumbnail image if exists
-        if (product.thumbnailImage) {
-            fs.unlink(product.thumbnailImage, (err) => {
-                if (err) console.error('Error deleting file:', err);
+        // Check if product is already inactive
+        if (product.isActive === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Product is already deleted',
             });
         }
 
-        await product.destroy();
+        // Soft delete - set isActive to 0 instead of destroying
+        product.isActive = 0;
+        await product.save();
+
+        // Also deactivate all product attributes
+        await ProductAttribute.update(
+            { isActive: 0 },
+            { where: { productId: productId } }
+        );
 
         return res.status(200).json({
             success: true,
             message: 'Product deleted successfully',
+            data: {
+                id: product.id,
+                name: product.name,
+                isActive: product.isActive,
+            },
         });
     } catch (error) {
         console.error('Delete product error:', error);
