@@ -1,5 +1,9 @@
 import dotenv from 'dotenv';
 import app from './app.js';
+import './Model/associations.js'
+
+// Import SL associations (NEW)
+import './Model/SL/sl_associations.js'
 
 dotenv.config();
 

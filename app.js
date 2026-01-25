@@ -12,6 +12,11 @@ import billRouter from './Router/Bill.router.js';
 import productAttributeRouter from './Router/ProductAttribute.router.js';
 import storeProfileRouter from './Router/StoreProfile.router.js';
 
+
+// SL
+import slCartRouter from './Router/SL/SLCart.router.js'
+import slBillRouter from './Router/SL/SLBill.router.js';
+
 dotenv.config();
 
 const app = express();
@@ -80,6 +85,15 @@ app.use('/api', cartRouter);
 app.use('/api', billRouter);
 app.use('/api', productAttributeRouter);
 app.use('/api/store', storeProfileRouter);
+
+
+
+
+// SL Routes
+app.use('/api', slCartRouter);
+app.use('/api', slBillRouter);
+
+
 
 // 404 handler
 app.use((req, res) => {
