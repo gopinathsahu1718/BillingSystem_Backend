@@ -92,6 +92,21 @@ const SLCart = sequelize.define('SLCart', {
             // Calculate total
             cart.total = cart.subtotal + cart.gstAmount;
         },
+        beforeUpdate: (cart) => {
+            // Recalculate on update as well
+            cart.subtotal = parseFloat(cart.productPrice) * cart.quantity;
+
+            // Calculate GST (only for sl_swasthik)
+            if (cart.category === 'sl_swasthik') {
+                cart.gstAmount = (cart.subtotal * parseFloat(cart.gstRate || 0)) / 100;
+            } else {
+                cart.gstRate = 0.00;
+                cart.gstAmount = 0.00;
+            }
+
+            // Calculate total
+            cart.total = cart.subtotal + cart.gstAmount;
+        },
     },
 });
 

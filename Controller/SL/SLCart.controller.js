@@ -227,7 +227,26 @@ const updateSLCart = async (req, res) => {
             cartItem.gstRate = gstRate;
         }
 
-        // Save (calculations done in model hook)
+        // Manually recalculate since we're updating not creating
+        const finalPrice = parseFloat(cartItem.productPrice);
+        const finalQuantity = parseInt(cartItem.quantity);
+        const finalGstRate = parseFloat(cartItem.gstRate || 0);
+
+        // Calculate subtotal
+        cartItem.subtotal = finalPrice * finalQuantity;
+
+        // Calculate GST (only for sl_swasthik)
+        if (cartItem.category === 'sl_swasthik') {
+            cartItem.gstAmount = (cartItem.subtotal * finalGstRate) / 100;
+        } else {
+            cartItem.gstRate = 0.00;
+            cartItem.gstAmount = 0.00;
+        }
+
+        // Calculate total
+        cartItem.total = parseFloat(cartItem.subtotal) + parseFloat(cartItem.gstAmount);
+
+        // Save with calculations
         await cartItem.save();
 
         return res.status(200).json({
