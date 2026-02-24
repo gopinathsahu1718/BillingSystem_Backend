@@ -85,7 +85,7 @@ const getSLCartItemById = async (req, res) => {
 const addToSLCart = async (req, res) => {
     try {
         const adminId = req.admin.id;
-        const { category, productName, productPrice, quantity = 1, gstRate = 0 } = req.body;
+        const { category, productName, productPrice, quantity = 1, gstRate = 0, hsn = null } = req.body;
 
         // Validation
         if (!category) {
@@ -145,7 +145,7 @@ const addToSLCart = async (req, res) => {
         // For sl_laxmi, ensure gstRate is 0
         const finalGstRate = category === 'sl_laxmi' ? 0 : (gstRate || 0);
 
-        // Create cart item (calculations done in model hook)
+        // Create cart item (calculations done in model hook with internal GST)
         const cartItem = await SLCart.create({
             adminId,
             category,
@@ -153,6 +153,7 @@ const addToSLCart = async (req, res) => {
             productPrice,
             quantity,
             gstRate: finalGstRate,
+            hsn: hsn,
         });
 
         return res.status(201).json({
@@ -175,7 +176,7 @@ const updateSLCart = async (req, res) => {
     try {
         const adminId = req.admin.id;
         const { cartId } = req.params;
-        const { productName, productPrice, quantity, gstRate } = req.body;
+        const { productName, productPrice, quantity, gstRate, hsn } = req.body;
 
         const cartItem = await SLCart.findOne({
             where: {
@@ -227,23 +228,33 @@ const updateSLCart = async (req, res) => {
             cartItem.gstRate = gstRate;
         }
 
-        // Manually recalculate since we're updating not creating
+        // Update HSN if provided
+        if (hsn !== undefined) {
+            cartItem.hsn = hsn;
+        }
+
+        // Manually recalculate with internal GST (price includes GST)
         const finalPrice = parseFloat(cartItem.productPrice);
         const finalQuantity = parseInt(cartItem.quantity);
         const finalGstRate = parseFloat(cartItem.gstRate || 0);
 
-        // Calculate subtotal
-        cartItem.subtotal = finalPrice * finalQuantity;
+        if (cartItem.category === 'sl_swasthik' && finalGstRate > 0) {
+            // Calculate GST amount from inclusive price
+            // Formula: GST Amount = (Price × GST Rate) / (100 + GST Rate)
+            const gstAmount = (finalPrice * finalGstRate) / (100 + finalGstRate);
+            const priceWithoutGst = finalPrice - gstAmount;
 
-        // Calculate GST (only for sl_swasthik)
-        if (cartItem.category === 'sl_swasthik') {
-            cartItem.gstAmount = (cartItem.subtotal * finalGstRate) / 100;
+            // Calculate for quantity
+            cartItem.subtotal = priceWithoutGst * finalQuantity;
+            cartItem.gstAmount = gstAmount * finalQuantity;
         } else {
+            // For sl_laxmi or 0% GST
             cartItem.gstRate = 0.00;
+            cartItem.subtotal = finalPrice * finalQuantity;
             cartItem.gstAmount = 0.00;
         }
 
-        // Calculate total
+        // Calculate total (subtotal already excludes GST, so total = subtotal + gstAmount)
         cartItem.total = parseFloat(cartItem.subtotal) + parseFloat(cartItem.gstAmount);
 
         // Save with calculations

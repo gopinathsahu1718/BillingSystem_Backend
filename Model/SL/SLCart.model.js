@@ -41,6 +41,11 @@ const SLCart = sequelize.define('SLCart', {
             min: 1,
         },
     },
+    hsn: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        defaultValue: null,
+    },
     gstRate: {
         type: DataTypes.DECIMAL(5, 2),
         allowNull: true,
@@ -78,14 +83,25 @@ const SLCart = sequelize.define('SLCart', {
     ],
     hooks: {
         beforeValidate: (cart) => {
-            // Calculate subtotal
-            cart.subtotal = parseFloat(cart.productPrice) * cart.quantity;
+            const finalPrice = parseFloat(cart.productPrice);
+            const finalQuantity = cart.quantity;
+            const finalGstRate = parseFloat(cart.gstRate || 0);
 
-            // Calculate GST (only for sl_swasthik)
-            if (cart.category === 'sl_swasthik') {
-                cart.gstAmount = (cart.subtotal * parseFloat(cart.gstRate || 0)) / 100;
+            // Price includes GST (External GST to Internal GST conversion)
+            // Formula: GST Amount = (Price × GST Rate) / (100 + GST Rate)
+
+            if (cart.category === 'sl_swasthik' && finalGstRate > 0) {
+                // Calculate GST amount from inclusive price
+                const gstAmount = (finalPrice * finalGstRate) / (100 + finalGstRate);
+                const priceWithoutGst = finalPrice - gstAmount;
+
+                // Calculate for quantity
+                cart.subtotal = priceWithoutGst * finalQuantity;
+                cart.gstAmount = gstAmount * finalQuantity;
             } else {
+                // For sl_laxmi or 0% GST
                 cart.gstRate = 0.00;
+                cart.subtotal = finalPrice * finalQuantity;
                 cart.gstAmount = 0.00;
             }
 
@@ -93,14 +109,25 @@ const SLCart = sequelize.define('SLCart', {
             cart.total = cart.subtotal + cart.gstAmount;
         },
         beforeUpdate: (cart) => {
-            // Recalculate on update as well
-            cart.subtotal = parseFloat(cart.productPrice) * cart.quantity;
+            const finalPrice = parseFloat(cart.productPrice);
+            const finalQuantity = cart.quantity;
+            const finalGstRate = parseFloat(cart.gstRate || 0);
 
-            // Calculate GST (only for sl_swasthik)
-            if (cart.category === 'sl_swasthik') {
-                cart.gstAmount = (cart.subtotal * parseFloat(cart.gstRate || 0)) / 100;
+            // Price includes GST (External GST to Internal GST conversion)
+            // Formula: GST Amount = (Price × GST Rate) / (100 + GST Rate)
+
+            if (cart.category === 'sl_swasthik' && finalGstRate > 0) {
+                // Calculate GST amount from inclusive price
+                const gstAmount = (finalPrice * finalGstRate) / (100 + finalGstRate);
+                const priceWithoutGst = finalPrice - gstAmount;
+
+                // Calculate for quantity
+                cart.subtotal = priceWithoutGst * finalQuantity;
+                cart.gstAmount = gstAmount * finalQuantity;
             } else {
+                // For sl_laxmi or 0% GST
                 cart.gstRate = 0.00;
+                cart.subtotal = finalPrice * finalQuantity;
                 cart.gstAmount = 0.00;
             }
 

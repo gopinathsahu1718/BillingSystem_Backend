@@ -156,6 +156,11 @@ const SLBillItem = sequelize.define('SLBillItem', {
         type: DataTypes.INTEGER,
         allowNull: false,
     },
+    hsn: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        defaultValue: null,
+    },
     gstRate: {
         type: DataTypes.DECIMAL(5, 2),
         allowNull: false,

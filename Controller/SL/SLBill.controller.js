@@ -210,18 +210,13 @@ const createSLBill = async (req, res) => {
         const billItemsData = [];
 
         for (const cartItem of cartItems) {
+            // Cart already has internal GST calculated (price includes GST)
+            // subtotal = price without GST
+            // gstAmount = extracted GST from price
             const itemSubtotal = parseFloat(cartItem.subtotal);
-            let itemGST = 0;
-            let itemCGST = 0;
-            let itemSGST = 0;
-
-            // Calculate GST only for sl_swasthik
-            if (category === 'sl_swasthik') {
-                itemGST = parseFloat(cartItem.gstAmount);
-                itemCGST = itemGST / 2;
-                itemSGST = itemGST / 2;
-            }
-
+            const itemGST = parseFloat(cartItem.gstAmount);
+            const itemCGST = itemGST / 2;
+            const itemSGST = itemGST / 2;
             const itemTotal = itemSubtotal + itemGST;
 
             // Add to totals
@@ -236,6 +231,7 @@ const createSLBill = async (req, res) => {
                 productName: cartItem.productName,
                 productPrice: parseFloat(cartItem.productPrice),
                 quantity: cartItem.quantity,
+                hsn: cartItem.hsn,
                 gstRate: parseFloat(cartItem.gstRate || 0),
                 subtotal: itemSubtotal,
                 cgst: itemCGST,
