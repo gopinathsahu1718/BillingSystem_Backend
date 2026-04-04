@@ -164,9 +164,10 @@ const createSLBill = async (req, res) => {
             shipToAddress,
             shipToMobile,
             paymentMode = 'cash',
+            billDate,                    // ← NEW
         } = req.body;
 
-        // Validate required fields
+        // Validation
         if (!billToName || !billToAddress || !billToMobile) {
             await transaction.rollback();
             return res.status(400).json({
@@ -180,6 +181,14 @@ const createSLBill = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Ship To details are required (name, address, mobile)',
+            });
+        }
+
+        if (!billDate) {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                message: 'Bill Date is required',
             });
         }
 
@@ -197,10 +206,9 @@ const createSLBill = async (req, res) => {
             });
         }
 
-        // Get category from first item (all items should be same category due to cart validation)
         const category = cartItems[0].category;
 
-        // Calculate bill totals
+        // Calculate bill totals (unchanged)
         let totalSubtotal = 0;
         let totalCGST = 0;
         let totalSGST = 0;
@@ -210,23 +218,18 @@ const createSLBill = async (req, res) => {
         const billItemsData = [];
 
         for (const cartItem of cartItems) {
-            // Cart already has internal GST calculated (price includes GST)
-            // subtotal = price without GST
-            // gstAmount = extracted GST from price
             const itemSubtotal = parseFloat(cartItem.subtotal);
             const itemGST = parseFloat(cartItem.gstAmount);
             const itemCGST = itemGST / 2;
             const itemSGST = itemGST / 2;
             const itemTotal = itemSubtotal + itemGST;
 
-            // Add to totals
             totalSubtotal += itemSubtotal;
             totalCGST += itemCGST;
             totalSGST += itemSGST;
             totalGST += itemGST;
             grandTotal += itemTotal;
 
-            // Prepare bill item data
             billItemsData.push({
                 productName: cartItem.productName,
                 productPrice: parseFloat(cartItem.productPrice),
@@ -241,12 +244,11 @@ const createSLBill = async (req, res) => {
             });
         }
 
-        // Generate bill number
         const billNumber = await generateSLBillNumber();
 
-        // Create bill
         const bill = await SLBill.create({
             billNumber,
+            billDate,                    // ← Saved here
             category,
             billToName,
             billToAddress,
@@ -273,26 +275,14 @@ const createSLBill = async (req, res) => {
         }
 
         // Clear cart
-        await SLCart.destroy({
-            where: { adminId },
-            transaction,
-        });
+        await SLCart.destroy({ where: { adminId }, transaction });
 
-        // Commit transaction
         await transaction.commit();
 
-        // Fetch complete bill with items
         const completeBill = await SLBill.findByPk(bill.id, {
             include: [
-                {
-                    model: SLBillItem,
-                    as: 'items',
-                },
-                {
-                    model: Admin,
-                    as: 'creator',
-                    attributes: ['id', 'username', 'email'],
-                },
+                { model: SLBillItem, as: 'items' },
+                { model: Admin, as: 'creator', attributes: ['id', 'username', 'email'] },
             ],
         });
 

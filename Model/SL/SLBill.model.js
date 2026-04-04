@@ -1,8 +1,7 @@
 import { DataTypes } from 'sequelize';
-import { sequelize } from '../../Database/Database.js'
+import { sequelize } from '../../Database/Database.js';
 import moment from 'moment-timezone';
 
-// SL Bills Model
 const SLBill = sequelize.define('SLBill', {
     id: {
         type: DataTypes.INTEGER,
@@ -13,6 +12,10 @@ const SLBill = sequelize.define('SLBill', {
         type: DataTypes.STRING(50),
         allowNull: false,
         unique: true,
+    },
+    billDate: {                    // ← Changed to allowNull: true temporarily
+        type: DataTypes.DATEONLY,
+        allowNull: true,           // Important for existing data
     },
     category: {
         type: DataTypes.ENUM('sl_swasthik', 'sl_laxmi'),
@@ -47,31 +50,11 @@ const SLBill = sequelize.define('SLBill', {
         allowNull: false,
         defaultValue: 'cash',
     },
-    subtotal: {
-        type: DataTypes.DECIMAL(10, 2),
-        allowNull: false,
-        defaultValue: 0.00,
-    },
-    cgst: {
-        type: DataTypes.DECIMAL(10, 2),
-        allowNull: false,
-        defaultValue: 0.00,
-    },
-    sgst: {
-        type: DataTypes.DECIMAL(10, 2),
-        allowNull: false,
-        defaultValue: 0.00,
-    },
-    totalGST: {
-        type: DataTypes.DECIMAL(10, 2),
-        allowNull: false,
-        defaultValue: 0.00,
-    },
-    grandTotal: {
-        type: DataTypes.DECIMAL(10, 2),
-        allowNull: false,
-        defaultValue: 0.00,
-    },
+    subtotal: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0.00 },
+    cgst: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0.00 },
+    sgst: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0.00 },
+    totalGST: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0.00 },
+    grandTotal: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0.00 },
     isActive: {
         type: DataTypes.TINYINT(1),
         allowNull: false,
@@ -80,10 +63,7 @@ const SLBill = sequelize.define('SLBill', {
     createdBy: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        references: {
-            model: 'admins',
-            key: 'id',
-        },
+        references: { model: 'admins', key: 'id' },
         onUpdate: 'CASCADE',
         onDelete: 'RESTRICT',
     },
@@ -91,33 +71,23 @@ const SLBill = sequelize.define('SLBill', {
     tableName: 'sl_bills',
     timestamps: true,
     indexes: [
-        {
-            fields: ['billNumber'],
-            unique: true,
-        },
-        {
-            fields: ['category'],
-        },
-        {
-            fields: ['isActive'],
-        },
-        {
-            fields: ['createdBy'],
-        },
+        { fields: ['billNumber'], unique: true },
+        { fields: ['category'] },
+        { fields: ['isActive'] },
+        { fields: ['createdBy'] },
+        { fields: ['billDate'] },
     ],
 });
 
-// Instance method to format dates to IST
+// toJSON method remains same
 SLBill.prototype.toJSON = function () {
     const values = { ...this.get() };
 
-    const formatIST = (date) =>
-        date ? moment(date).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss') : null;
+    const formatIST = (date) => date ? moment(date).tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss') : null;
 
     if (values.createdAt) values.createdAt = formatIST(values.createdAt);
     if (values.updatedAt) values.updatedAt = formatIST(values.updatedAt);
 
-    // Format decimal values
     if (values.subtotal) values.subtotal = parseFloat(values.subtotal).toFixed(2);
     if (values.cgst) values.cgst = parseFloat(values.cgst).toFixed(2);
     if (values.sgst) values.sgst = parseFloat(values.sgst).toFixed(2);
