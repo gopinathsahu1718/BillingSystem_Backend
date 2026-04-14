@@ -3,6 +3,7 @@ import {
     getAllSLBills,
     getSLBillById,
     createSLBill,
+    editSLBill,
     disableSLBill,
     enableSLBill,
 } from '../../Controller/SL/SLBill.controller.js';
@@ -14,6 +15,7 @@ const router = express.Router();
 router.get('/sl-bills', authMiddleware, getAllSLBills);
 router.get('/sl-bills/:billId', authMiddleware, getSLBillById);
 router.post('/sl-bills', authMiddleware, createSLBill);
+router.put('/sl-bills/:billId/edit', authMiddleware, editSLBill);       // ← NEW
 router.put('/sl-bills/:billId/disable', authMiddleware, disableSLBill);
 router.put('/sl-bills/:billId/enable', authMiddleware, enableSLBill);
 
