@@ -4,20 +4,21 @@ import { Admin } from '../../Model/Admin.model.js';
 import { sequelize } from '../../Database/Database.js';
 
 // Generate unique bill number
+// Generate unique bill number - Yearly sequence (e.g., SL24-0001, SL25-0002, ...)
 const generateSLBillNumber = async () => {
     const prefix = 'SL';
     const date = new Date();
-    const year = date.getFullYear().toString().slice(-2);
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString().slice(-2); // e.g., '24', '25'
 
-    const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-    const lastDayOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
+    // Get first and last day of the current year
+    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+    const lastDayOfYear = new Date(date.getFullYear(), 11, 31, 23, 59, 59);
 
     const lastBill = await SLBill.findOne({
         where: {
             createdAt: {
-                [sequelize.Sequelize.Op.gte]: firstDayOfMonth,
-                [sequelize.Sequelize.Op.lte]: lastDayOfMonth,
+                [sequelize.Sequelize.Op.gte]: firstDayOfYear,
+                [sequelize.Sequelize.Op.lte]: lastDayOfYear,
             },
         },
         order: [['id', 'DESC']],
@@ -25,11 +26,12 @@ const generateSLBillNumber = async () => {
 
     let sequence = 1;
     if (lastBill) {
+        // Extract sequence from billNumber like "SL24-0456"
         const lastSequence = parseInt(lastBill.billNumber.split('-')[1]);
         sequence = lastSequence + 1;
     }
 
-    return `${prefix}${year}${month}-${sequence.toString().padStart(4, '0')}`;
+    return `${prefix}${year}-${sequence.toString().padStart(4, '0')}`;
 };
 
 // ─── Get all bills ────────────────────────────────────────────
